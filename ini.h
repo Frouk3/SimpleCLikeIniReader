@@ -6,22 +6,9 @@
 
 #pragma warning(disable : 4996)
 
-inline bool ends_with(const char* str, const char* prefix, bool case_sensitive)
+inline bool dummy()
 {
-	auto str2 = &str[strlen(str) - 1];
-	auto prefix2 = &prefix[strlen(prefix) - 1];
-
-	while (prefix2 >= prefix)
-	{
-		bool equal;
-		if (case_sensitive)
-			equal = (*str2-- == *prefix2--);
-		else
-			equal = (::tolower(*str2--) == ::tolower(*prefix2--));
-
-		if (!equal) return false;
-	}
-	return true;
+	return false;
 }
 
 class IniReader
@@ -104,7 +91,7 @@ public:
 		}
 		char buff[MAX_PATH];
 		HMODULE hm = NULL;
-		GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCSTR)&ends_with, &hm);
+		GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCSTR)&dummy, &hm);
 		GetModuleFileNameA(hm, buff, sizeof(buff));
 
 		char* ptr = strrchr(buff, '\\');
