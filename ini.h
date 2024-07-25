@@ -167,7 +167,7 @@ public:
 		sprintf(flDef, "%f", flDefValue);
 		GetPrivateProfileStringA(section, key, flDef, flRes, sizeof(flRes), filePath);
 
-		return atof(flRes);
+		return (float)atof(flRes);
 	}
 
 	void WriteFloat(const char* section, const char* key, float flValue)
@@ -201,7 +201,7 @@ public:
 	
 		size_t resBuffSize = strlen(resBuff);
 		
-		for (int i = 0; ; i++)
+		for (unsigned int i = 0; ; i++)
 		{
 			if (i >= resBuffSize || resBuff[i] == '\0')
 				break;
