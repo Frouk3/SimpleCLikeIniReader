@@ -94,7 +94,7 @@ public:
 		GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCSTR)&dummy, &hm);
 		GetModuleFileNameA(hm, buff, sizeof(buff));
 
-		char* ptr = strrchr(buff, '\\');
+		char* ptr = strrchr(buff, '\\'); // remove the executeable name from the path
 
 		if (ptr)
 			*ptr = '\0';
@@ -181,6 +181,7 @@ public:
 	const char* ReadString(const char* section, const char* key, const char* szDefaultValue)
 	{
 		static char buff[512];
+		memset(buff, 0, sizeof(buff));
 
 		GetPrivateProfileStringA(section, key, szDefaultValue, buff, sizeof(buff), filePath);
 
@@ -194,12 +195,9 @@ public:
 
 	bool ReadBool(const char* section, const char* key, bool bDefaultBool)
 	{
-		char buff[8];
 		char resBuff[8];
 
-		sprintf(buff, "%s", bDefaultBool ? "true" : "false");
-
-		GetPrivateProfileStringA(section, key, buff, resBuff, sizeof(resBuff), filePath);
+		GetPrivateProfileStringA(section, key, bDefaultBool ? "true" : "false", resBuff, sizeof(resBuff), filePath);
 	
 		size_t resBuffSize = strlen(resBuff);
 		
