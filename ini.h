@@ -227,6 +227,20 @@ public:
 		}
 		return nullptr;
 	}
+	// Version with std::string
+	std::string& ReadString(const char* section, const char* key, std::string szDefaultValue)
+	{
+		std::string string;
+
+		auto size = GetPrivateProfileStringA(section, key, nullptr, nullptr, 0, m_FilePath);
+
+		string.resize(size + 1);
+
+		if (size >= 1)
+			GetPrivateProfileStringA(section, key, szDefaultValue.c_str(), string.data(), size, m_FilePath);
+
+		return string;
+	}
 
 	void WriteString(const char* section, const char* key, const char* szValue)
 	{
