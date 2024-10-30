@@ -14,7 +14,7 @@ inline bool dummy()
 class IniReader
 {
 private:
-	char* filePath;
+	char* m_FilePath = nullptr; // Avoid stack based values(which will literally crash on path set)
 public:
 	class IniSection
 	{
@@ -84,11 +84,28 @@ public:
 
 	void SetIniPath(const char* filename)
 	{
-		if (this->filePath)
+		if (this->m_FilePath)
 		{
-			free(this->filePath);
-			this->filePath = nullptr;
+			free(this->m_FilePath);
+			this->m_FilePath = nullptr;
 		}
+
+		if (!strcmp(filename, ""))
+		{
+			filename = "default.ini";
+		}
+		else
+		{
+			char fileExt[6];
+			strcpy(fileExt, &filename[strlen(filename) - 4]);
+
+			for (int i = 0; ;)
+				fileExt[i] = tolower(fileExt[i++]);
+
+			if (strcmp(fileExt, ".ini")) // If we don't have .ini extension, just append it
+				strcat(fileExt, ".ini");
+		}
+
 		char buff[MAX_PATH];
 		HMODULE hm = NULL;
 		GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCSTR)&dummy, &hm);
@@ -105,14 +122,14 @@ public:
 			return;
 		}
 
-		this->filePath = (char*)malloc(strlen(buff) + strlen(filename) + 2);
-		if (this->filePath)
-			sprintf(this->filePath, "%s\\%s", buff, filename);
+		this->m_FilePath = (char*)malloc(strlen(buff) + strlen(filename) + 2);
+		if (this->m_FilePath)
+			sprintf(this->m_FilePath, "%s\\%s", buff, filename);
 	}
 
 	IniReader()
 	{
-		this->filePath = nullptr;
+		this->m_FilePath = nullptr;
 	}
 
 	IniReader(const char* fileName)
@@ -127,28 +144,33 @@ public:
 
 	~IniReader()
 	{
-		if (this->filePath)
+		if (this->m_FilePath)
 		{
-			free(this->filePath);
-			this->filePath = nullptr;
+			free(this->m_FilePath);
+			this->m_FilePath = nullptr;
 		}
 	}
 
 	void SetPath(const char* path)
 	{
-		if (this->filePath)
+		if (this->m_FilePath)
 		{
-			free(this->filePath);
-			this->filePath = nullptr;
+			free(this->m_FilePath);
+			this->m_FilePath = nullptr;
 		}
-		this->filePath = (char*)malloc(strlen(path) + 1);
-		if (this->filePath)
-			strcpy(this->filePath, path);
+		this->m_FilePath = (char*)malloc(strlen(path) + 1);
+		if (this->m_FilePath)
+			strcpy(this->m_FilePath, path);
 	}
 
 	int ReadInt(const char* section, const char* key, int iDefaultValue)
 	{
-		return GetPrivateProfileIntA(section, key, iDefaultValue, filePath);
+		return GetPrivateProfileIntA(section, key, iDefaultValue, m_FilePath);
+	}
+
+	int ReadInteger(const char* section, const char* key, int iDefaultValue)
+	{
+		return ReadInt(section, key, iDefaultValue);
 	}
 
 	void WriteInt(const char* section, const char* key, int value)
@@ -156,7 +178,12 @@ public:
 		char iBuff[32];
 
 		sprintf(iBuff, "%d", value);
-		WritePrivateProfileStringA(section, key, iBuff, filePath);
+		WritePrivateProfileStringA(section, key, iBuff, m_FilePath);
+	}
+
+	void WriteInteger(const char* section, const char* key, int value)
+	{
+		WriteInt(section, key, value);
 	}
 
 	float ReadFloat(const char* section, const char* key, float flDefValue)
@@ -165,7 +192,7 @@ public:
 		char flDef[32];
 
 		sprintf(flDef, "%f", flDefValue);
-		GetPrivateProfileStringA(section, key, flDef, flRes, sizeof(flRes), filePath);
+		GetPrivateProfileStringA(section, key, flDef, flRes, sizeof(flRes), m_FilePath);
 
 		return (float)atof(flRes);
 	}
@@ -175,7 +202,7 @@ public:
 		char flBuff[32];
 
 		sprintf(flBuff, "%f", flValue);
-		WritePrivateProfileStringA(section, key, flBuff, filePath);
+		WritePrivateProfileStringA(section, key, flBuff, m_FilePath);
 	}
 
 	const char* ReadString(const char* section, const char* key, const char* szDefaultValue)
@@ -183,21 +210,34 @@ public:
 		static char buff[512];
 		memset(buff, 0, sizeof(buff));
 
-		GetPrivateProfileStringA(section, key, szDefaultValue, buff, sizeof(buff), filePath);
+		GetPrivateProfileStringA(section, key, szDefaultValue, buff, sizeof(buff), m_FilePath);
 
 		return buff;
+	}
+	// dynamic buffer, returns the allocated string, must be freed after the use
+	char* ReadString(const char* szSection, const char* szKey, const char* szDefaultValue, char** pValue)
+	{
+		auto stringLength = GetPrivateProfileStringA(szSection, szKey, nullptr, nullptr, 0, m_FilePath);
+		if (stringLength >= 1 && pValue)
+		{
+			*pValue = (char*)malloc(stringLength + 1);
+			GetPrivateProfileStringA(szSection, szKey, szDefaultValue, *pValue, stringLength, m_FilePath);
+
+			return *pValue;
+		}
+		return nullptr;
 	}
 
 	void WriteString(const char* section, const char* key, const char* szValue)
 	{
-		WritePrivateProfileStringA(section, key, szValue, filePath);
+		WritePrivateProfileStringA(section, key, szValue, m_FilePath);
 	}
 
 	bool ReadBool(const char* section, const char* key, bool bDefaultBool)
 	{
 		char resBuff[8];
 
-		GetPrivateProfileStringA(section, key, bDefaultBool ? "true" : "false", resBuff, sizeof(resBuff), filePath);
+		GetPrivateProfileStringA(section, key, bDefaultBool ? "true" : "false", resBuff, sizeof(resBuff), m_FilePath);
 	
 		size_t resBuffSize = strlen(resBuff);
 		
@@ -219,7 +259,7 @@ public:
 
 	void WriteBool(const char* section, const char* key, bool bValue)
 	{
-		WritePrivateProfileStringA(section, key, bValue ? "true" : "false", filePath);
+		WritePrivateProfileStringA(section, key, bValue ? "true" : "false", m_FilePath);
 	}
 
 	IniSection operator[](const char* section)
