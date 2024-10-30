@@ -99,7 +99,7 @@ public:
 			char fileExt[6];
 			strcpy(fileExt, &filename[strlen(filename) - 4]);
 
-			for (int i = 0; ;)
+			for (int i = 0; i < 4;)
 				fileExt[i] = tolower(fileExt[i++]);
 
 			if (strcmp(fileExt, ".ini")) // If we don't have .ini extension, just append it
