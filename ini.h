@@ -214,30 +214,14 @@ public:
 
 		return buff;
 	}
-	// dynamic buffer, returns the allocated string, must be freed after the use
-	char* ReadString(const char* szSection, const char* szKey, const char* szDefaultValue, char** pValue)
-	{
-		auto stringLength = GetPrivateProfileStringA(szSection, szKey, nullptr, nullptr, 0, m_FilePath);
-		if (stringLength >= 1 && pValue)
-		{
-			*pValue = (char*)malloc(stringLength + 1);
-			GetPrivateProfileStringA(szSection, szKey, szDefaultValue, *pValue, stringLength, m_FilePath);
-
-			return *pValue;
-		}
-		return nullptr;
-	}
 	// Version with std::string
-	std::string& ReadString(const char* section, const char* key, std::string szDefaultValue)
+	std::string ReadString(const char* section, const char* key, std::string szDefaultValue)
 	{
-		std::string string;
+		auto str = ReadString(section, key, szDefaultValue.c_str());
 
-		auto size = GetPrivateProfileStringA(section, key, nullptr, nullptr, 0, m_FilePath);
+		std::string string(strlen(str), 0);
 
-		string.resize(size + 1);
-
-		if (size >= 1)
-			GetPrivateProfileStringA(section, key, szDefaultValue.c_str(), string.data(), size, m_FilePath);
+		string = str;
 
 		return string;
 	}
