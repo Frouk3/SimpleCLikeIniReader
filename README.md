@@ -10,6 +10,6 @@ ini.WriteInteger("MySection", "MyValue", myValue); // Save
 
 // Or with the new syntax(it will assume that 0 is default value, so, if you have some value that isn't zero, use full function)
 
-int myValue = ini["MySection"]["MyValue"];
-ini["MySection"]["MyValue"] = myValue;
+int myValue = ini["MySection"]["MyValue"]; // You can only read using these operators
+// Writing is only available using full function. Ref: WriteInteger
 ```
