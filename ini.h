@@ -3,107 +3,175 @@
 #include <stdlib.h>
 #include <Windows.h>
 #include <string>
+#include <vector>
 
+#pragma warning(push)
 #pragma warning(disable : 4996)
-
-inline bool dummy()
-{
-	return false;
-}
+#pragma warning(disable : 6387)
 
 class IniReader
 {
-private:
-	char* m_FilePath = nullptr; // Avoid stack based values(which will literally crash on path set)
 public:
 	class IniSection
 	{
+	private:
+		IniReader* m_parent;
+		std::string m_szSection;
 	public:
-		char* section;
-		IniReader* parent;
-
-		struct IniKey
+		class IniKey
 		{
-			char* key;
-			IniSection* section;
+		private:
+			IniSection* m_parent;
+			std::string m_szKey;
+			std::string m_value; // from string to another typename
+		public:
 
-			IniKey(const char* keyName, IniSection* sect) : key((char*)keyName), section(sect) {};
-
-			IniKey operator=(const char* value)
+			IniKey()
 			{
-				section->parent->WriteString(section->section, key, value);
-				return *this;
+				m_parent = nullptr;
+			}
+			
+			~IniKey()
+			{
+				m_parent = nullptr;
 			}
 
-			operator const char* ()
-			{
-				return section->parent->ReadString(section->section, key, "");
-			}
+			IniKey(const char* szKey, IniSection* parent) : m_szKey(szKey), m_parent(parent) {}
 
-			IniKey operator=(float value)
-			{
-				section->parent->WriteFloat(section->section, key, value);
-				return *this;
-			}
+			const char* getKeyName() { return m_szKey.c_str(); }
+			std::string& getValue() { return m_value; }
 
-			operator float()
-			{
-				return section->parent->ReadFloat(section->section, key, 0.0f);
-			}
+			bool empty() { return m_value.empty() && m_parent == nullptr; }
 
-			IniKey operator=(int value)
-			{
-				section->parent->WriteInt(section->section, key, value);
-				return *this;
-			}
+			// Input operators
 
-			operator int()
-			{
-				return section->parent->ReadInt(section->section, key, 0);
-			}
+			/* Unstable at this point, use full functions instead
+			IniKey& operator=(const char* value) { m_parent->m_parent->WriteString(m_parent->getSectionName(), getKeyName(), value); return *this; }
+			IniKey& operator=(int value) { m_parent->m_parent->WriteInt(m_parent->getSectionName(), getKeyName(), value); return *this; }
+			IniKey& operator=(float value) { m_parent->m_parent->WriteFloat(m_parent->getSectionName(), getKeyName(), value); return *this; }
+			IniKey& operator=(bool value) { m_parent->m_parent->WriteBool(m_parent->getSectionName(), getKeyName(), value); return *this; }
+			*/
 
-			IniKey operator=(bool value)
-			{
-				section->parent->WriteBool(section->section, key, value);
-				return *this;
-			}
+			// Output operators
 
-			operator bool()
-			{
-				return section->parent->ReadBool(section->section, key, false);
-			}
+			operator const char* () { return m_value.c_str(); }
+			operator int() { return atoi(m_value.c_str()); }
+			operator float() { return (float)atof(m_value.c_str()); }
+			operator bool() { return m_value == "true"; }
 		};
 
-		IniSection(const char* sect, IniReader* par) : section((char*)sect), parent(par) {};
-
-		IniKey operator[](const char* key)
+		IniSection()
 		{
-			return IniKey(key, this);
+			m_parent = nullptr;
 		}
-	};
 
+		~IniSection()
+		{
+			m_parent = nullptr;
+			m_keys.clear();
+		}
+
+		IniSection(const char* szSection, IniReader* parent) : m_szSection(szSection), m_parent(parent) {}
+	private:
+		std::vector<IniKey> m_keys;
+	public:
+		IniKey& get(const char* szKey)
+		{
+			IniKey dummy;
+
+			for (IniKey& key : m_keys)
+			{
+				if (!strcmp(key.getKeyName(), szKey))
+					return key;
+			}
+
+			return dummy;
+		}
+
+		IniKey& add(const char* szKey)
+		{
+			if (IniKey& existing = get(szKey); existing.empty())
+			{
+				m_keys.push_back(IniKey(szKey, this)); // Don't add any more of keys
+				return m_keys.back();
+			}
+			else
+			{
+				return existing;
+			}
+		}
+
+		IniKey& add(const char* szKey, std::string value)
+		{
+			if (IniKey& existingKey = get(szKey); existingKey.empty())
+			{
+				IniKey key(szKey, this);
+
+				key.getValue() = value;
+
+				m_keys.push_back(key);
+
+				return m_keys.back();
+			}
+			else
+			{
+				existingKey.getValue() = value;
+
+				return existingKey;
+			}
+		}
+
+		std::vector<IniKey>& getKeys() { return m_keys; }
+
+		IniKey& operator[](const char* szKey)
+		{
+			IniKey dummy;
+
+			for (IniKey& key : m_keys)
+			{
+				if (!strcmp(key.getKeyName(), szKey))
+					return key;
+			}
+
+			return dummy;
+		}
+
+		bool empty() { return m_szSection.empty() && m_parent == nullptr; }
+
+		const char* getSectionName() { return m_szSection.c_str(); }
+
+		IniKey* begin() { return m_keys.data(); }
+		const IniKey* begin() const { return m_keys.data(); }
+
+		IniKey* end() { return m_keys.data() + m_keys.size(); }
+		const IniKey* end() const { return m_keys.data() + m_keys.size(); }
+	};
+private:
+	static inline void dummy() {};
+
+	char* m_FilePath = nullptr; // Avoid stack based values(which will literally crash on path set)
+	std::vector<IniSection> m_sections;
+public:
 	void SetIniPath(const char* filename)
 	{
-		if (this->m_FilePath)
+		char* str = (char*)_malloca(strlen(filename) + 16); 
+		if (str)
+			strcpy(str, filename);
+
+		if (m_FilePath)
 		{
-			free(this->m_FilePath);
-			this->m_FilePath = nullptr;
+			free(m_FilePath);
+			m_FilePath = nullptr;
 		}
 
-		if (!strcmp(filename, ""))
+		if (!strcmp(filename, "") && str)
 		{
-			filename = "default.ini";
+			strcpy(str, "default.ini");
 		}
 		else
 		{
-			char fileExt[6];
-			strcpy(fileExt, &filename[strlen(filename) - 4]);
-
-			for (int i = 0; i < 4; i++)
-				fileExt[i] = tolower(fileExt[i]);
-
-			if (strcmp(fileExt, ".ini")) // If we don't have .ini extension, just append it
-				strcat(fileExt, ".ini");
+			if (const char* ext = strrchr(filename, '.'); !ext && str)
+				strcat(str, ".ini");
 		}
 
 		char buff[MAX_PATH];
@@ -116,56 +184,128 @@ public:
 		if (ptr)
 			*ptr = '\0';
 
-		if (!strncmp(filename, buff, strlen(buff)))
+		if (strchr(filename, ':'))
 		{
 			SetPath(filename);
 			return;
 		}
 
-		this->m_FilePath = (char*)malloc(strlen(buff) + strlen(filename) + 2);
-		if (this->m_FilePath)
-			sprintf(this->m_FilePath, "%s\\%s", buff, filename);
+		m_FilePath = (char*)malloc(strlen(buff) + strlen(str) + 2);
+		if (m_FilePath)
+			sprintf(m_FilePath, "%s\\%s", buff, str);
 	}
 
 	IniReader()
 	{
-		this->m_FilePath = nullptr;
+		m_FilePath = nullptr;
 	}
 
 	IniReader(const char* fileName)
 	{
 		SetIniPath(fileName);
+
+		Parse();
 	}
-	
+
 	IniReader(std::string fileName)
 	{
 		SetIniPath(fileName.c_str());
+
+		Parse();
 	}
 
 	~IniReader()
 	{
-		if (this->m_FilePath)
+		if (m_FilePath)
 		{
-			free(this->m_FilePath);
-			this->m_FilePath = nullptr;
+			free(m_FilePath);
+			m_FilePath = nullptr;
 		}
+		m_sections.clear();
+	}
+
+	void Parse()
+	{
+		FILE* iniFile = fopen(m_FilePath, "r");
+
+		if (!iniFile)
+			return;
+
+		IniSection* currentSection = nullptr;
+		char line[1024];
+		bool inSection = false;
+
+		while (fgets(line, sizeof(line), iniFile)) 
+		{
+			char* start = line;
+			while (*start == ' ' || *start == '\t')
+				start++;
+
+			char* end = start + strlen(start) - 1;
+			while ((end > start) && (*end == ' ' || *end == '\t' || *end == '\n' || *end == '\r'))
+			{
+				*end = '\0';
+				end--;
+			}
+
+			if (*start == '\0' || *start == ';' || *start == '#' || !strncmp(start, "//", 2))
+				continue;
+
+			if (*start == '[') 
+			{
+				end = strchr(start, ']');
+				if (end != nullptr) 
+				{
+					*end = '\0';
+					m_sections.push_back(IniSection(start + 1, this));
+					currentSection = &m_sections.back();
+				}
+				continue;
+			}
+
+			char* delimiter = strchr(start, '=');
+			if (delimiter) 
+			{
+				*delimiter = '\0';
+				char* key = start;
+				char* value = delimiter + 1;
+
+				while (*key == ' ' || *key == '\t') key++;
+				while (*value == ' ' || *value == '\t' || *value == '"') value++;
+
+				if (char* chr = strrchr(value, '"'); chr)
+					*chr = 0;
+
+				IniSection::IniKey kkey(key, currentSection);
+				kkey.getValue() = value;
+
+				currentSection->getKeys().push_back(kkey);
+			}
+		}
+
+		fclose(iniFile);
 	}
 
 	void SetPath(const char* path)
 	{
-		if (this->m_FilePath)
+		if (m_FilePath)
 		{
-			free(this->m_FilePath);
-			this->m_FilePath = nullptr;
+			free(m_FilePath);
+			m_FilePath = nullptr;
 		}
-		this->m_FilePath = (char*)malloc(strlen(path) + 1);
-		if (this->m_FilePath)
-			strcpy(this->m_FilePath, path);
+		m_FilePath = (char*)malloc(strlen(path) + 1);
+		if (m_FilePath)
+			strcpy(m_FilePath, path);
 	}
 
 	int ReadInt(const char* section, const char* key, int iDefaultValue)
 	{
-		return GetPrivateProfileIntA(section, key, iDefaultValue, m_FilePath);
+		IniSection::IniKey &kkey = (*this)[section][key];
+
+		if (!kkey.empty())
+			return kkey;
+
+		return iDefaultValue;
 	}
 
 	int ReadInteger(const char* section, const char* key, int iDefaultValue)
@@ -175,10 +315,10 @@ public:
 
 	void WriteInt(const char* section, const char* key, int value)
 	{
-		char iBuff[32];
+		char iBuff[16];
 
 		sprintf(iBuff, "%d", value);
-		WritePrivateProfileStringA(section, key, iBuff, m_FilePath);
+		WriteString(section, key, iBuff);
 	}
 
 	void WriteInteger(const char* section, const char* key, int value)
@@ -188,13 +328,12 @@ public:
 
 	float ReadFloat(const char* section, const char* key, float flDefValue)
 	{
-		char flRes[32];
-		char flDef[32];
+		IniSection::IniKey &kkey = (*this)[section][key];
 
-		sprintf(flDef, "%f", flDefValue);
-		GetPrivateProfileStringA(section, key, flDef, flRes, sizeof(flRes), m_FilePath);
+		if (!kkey.empty())
+			return kkey;
 
-		return (float)atof(flRes);
+		return flDefValue;
 	}
 
 	void WriteFloat(const char* section, const char* key, float flValue)
@@ -202,28 +341,18 @@ public:
 		char flBuff[32];
 
 		sprintf(flBuff, "%f", flValue);
-		WritePrivateProfileStringA(section, key, flBuff, m_FilePath);
+		WriteString(section, key, flBuff);
 	}
 
-	const char* ReadString(const char* section, const char* key, const char* szDefaultValue)
-	{
-		static char buff[512];
-		memset(buff, 0, sizeof(buff));
-
-		GetPrivateProfileStringA(section, key, szDefaultValue, buff, sizeof(buff), m_FilePath);
-
-		return buff;
-	}
 	// Version with std::string
 	std::string ReadString(const char* section, const char* key, std::string szDefaultValue)
 	{
-		auto str = ReadString(section, key, szDefaultValue.c_str());
+		IniSection::IniKey &kkey = (*this)[section][key];
 
-		std::string string(strlen(str), 0);
-
-		string = str;
-
-		return string;
+		if (!kkey.empty())
+			return kkey.getValue();
+		
+		return szDefaultValue;
 	}
 
 	void WriteString(const char* section, const char* key, const char* szValue)
@@ -233,35 +362,105 @@ public:
 
 	bool ReadBool(const char* section, const char* key, bool bDefaultBool)
 	{
-		char resBuff[8];
+		IniSection::IniKey &kkey = (*this)[section][key];
 
-		GetPrivateProfileStringA(section, key, bDefaultBool ? "true" : "false", resBuff, sizeof(resBuff), m_FilePath);
-	
-		size_t resBuffSize = strlen(resBuff);
-		
-		for (unsigned int i = 0; ; i++)
-		{
-			if (i >= resBuffSize || resBuff[i] == '\0')
-				break;
-			
-			resBuff[i] = tolower(resBuff[i]);
-		} // case sensitive
-
-		if (!strcmp(resBuff, "true"))
-			return true;
-		else if (!strcmp(resBuff, "false"))
-			return false;
+		if (!kkey.empty())
+			return kkey;
 
 		return bDefaultBool;
 	}
 
 	void WriteBool(const char* section, const char* key, bool bValue)
 	{
-		WritePrivateProfileStringA(section, key, bValue ? "true" : "false", m_FilePath);
+		WriteString(section, key, bValue ? "true" : "false");
 	}
 
-	IniSection operator[](const char* section)
+	IniSection& operator[](const char* section)
 	{
-		return IniSection(section, this);
+		IniSection dummy;
+
+		for (IniSection& sect : m_sections)
+		{
+			if (!strcmp(sect.getSectionName(), section))
+				return sect;
+		}
+
+		return dummy;
 	};
+
+	IniSection& get(const char* szSection)
+	{
+		IniSection dummy;
+
+		for (IniSection &sect : m_sections)
+		{
+			if (!strcmp(sect.getSectionName(), szSection))
+				return sect;
+		}
+
+		return dummy;
+	}
+
+	IniSection& add(const char* szSection)
+	{
+		if (IniSection& existing = get(szSection); existing.empty())
+		{
+			IniSection section(szSection, this);
+
+			m_sections.push_back(section);
+
+			return m_sections.back();
+		}
+		else
+		{
+			return existing;
+		}
+	}
+
+	IniSection& add(const char* szSection, const char* szKey)
+	{
+		if (IniSection& existingSect = get(szSection); existingSect.empty())
+		{
+			IniSection section(szSection, this);
+
+			section.add(szKey);
+
+			m_sections.push_back(section);
+
+			return m_sections.back();
+		}
+		else
+		{
+			existingSect.add(szKey);
+
+			return existingSect;
+		}
+	}
+
+	IniSection& add(const char* szSection, const char* szKey, std::string value)
+	{
+		if (IniSection& existingSect = get(szSection); existingSect.empty())
+		{
+			IniSection section(szSection, this);
+
+			section.add(szKey, value);
+
+			m_sections.push_back(section);
+
+			return m_sections.back();
+		}
+		else
+		{
+			existingSect.add(szKey, value);
+			return existingSect;
+		}
+	}
+
+	IniSection* begin() { return m_sections.data(); }
+	const IniSection* begin() const { return m_sections.data(); }
+
+	IniSection* end() { return m_sections.data() + m_sections.size(); }
+	const IniSection* end() const { return m_sections.data() + m_sections.size(); }
 };
+
+#pragma warning(pop)
