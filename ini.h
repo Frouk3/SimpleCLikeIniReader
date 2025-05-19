@@ -57,7 +57,7 @@ public:
 			operator const char* () { return m_value.c_str(); }
 			operator int() { return atoi(m_value.c_str()); }
 			operator float() { return (float)atof(m_value.c_str()); }
-			operator bool() { return m_value == "true"; }
+			operator bool() { return !stricmp(m_value.c_str(),  "true"); }
 		};
 
 		IniSection()
@@ -75,25 +75,23 @@ public:
 	private:
 		std::vector<IniKey> m_keys;
 	public:
-		IniKey& get(const char* szKey)
+		IniKey* get(const char* szKey)
 		{
-			IniKey dummy;
-
 			for (IniKey& key : m_keys)
 			{
 				if (!strcmp(key.getKeyName(), szKey))
-					return key;
+					return &key;
 			}
 
-			return dummy;
+			return nullptr;
 		}
 
-		IniKey& add(const char* szKey)
+		IniKey* add(const char* szKey)
 		{
-			if (IniKey& existing = get(szKey); existing.empty())
+			if (IniKey* existing = get(szKey); existing->empty())
 			{
 				m_keys.push_back(IniKey(szKey, this)); // Don't add any more of keys
-				return m_keys.back();
+				return &m_keys.back();
 			}
 			else
 			{
@@ -101,9 +99,9 @@ public:
 			}
 		}
 
-		IniKey& add(const char* szKey, std::string value)
+		IniKey* add(const char* szKey, std::string value)
 		{
-			if (IniKey& existingKey = get(szKey); existingKey.empty())
+			if (IniKey *existingKey = get(szKey); existingKey->empty())
 			{
 				IniKey key(szKey, this);
 
@@ -111,11 +109,11 @@ public:
 
 				m_keys.push_back(key);
 
-				return m_keys.back();
+				return &m_keys.back();
 			}
 			else
 			{
-				existingKey.getValue() = value;
+				existingKey->getValue() = value;
 
 				return existingKey;
 			}
@@ -154,7 +152,7 @@ private:
 public:
 	void SetIniPath(const char* filename)
 	{
-		char* str = (char*)_malloca(strlen(filename) + 16); 
+		char* str = (char*)_alloca(strlen(filename) + 16); // _malloca should be freed by _freea, so no thanks, I won't use it
 		if (str)
 			strcpy(str, filename);
 
@@ -276,6 +274,8 @@ public:
 				if (char* chr = strrchr(value, '"'); chr)
 					*chr = 0;
 
+				while (*(key + strlen(key) - 1) == ' ') *(key + strlen(key) - 1) = '\0';
+
 				IniSection::IniKey kkey(key, currentSection);
 				kkey.getValue() = value;
 
@@ -298,17 +298,18 @@ public:
 			strcpy(m_FilePath, path);
 	}
 
-	int ReadInt(const char* section, const char* key, int iDefaultValue)
+	[[nodiscard]] int ReadInt(const char* section, const char* key, int iDefaultValue)
 	{
-		IniSection::IniKey &kkey = (*this)[section][key];
-
-		if (!kkey.empty())
-			return kkey;
+		if (IniSection* sect = get(section); sect)
+		{
+			if (IniSection::IniKey* pKey = sect->get(key); pKey)
+				return *pKey;
+		}
 
 		return iDefaultValue;
 	}
 
-	int ReadInteger(const char* section, const char* key, int iDefaultValue)
+	[[nodiscard]] int ReadInteger(const char* section, const char* key, int iDefaultValue)
 	{
 		return ReadInt(section, key, iDefaultValue);
 	}
@@ -326,12 +327,13 @@ public:
 		WriteInt(section, key, value);
 	}
 
-	float ReadFloat(const char* section, const char* key, float flDefValue)
+	[[nodiscard]] float ReadFloat(const char* section, const char* key, float flDefValue)
 	{
-		IniSection::IniKey &kkey = (*this)[section][key];
-
-		if (!kkey.empty())
-			return kkey;
+		if (IniSection* sect = get(section); sect)
+		{
+			if (IniSection::IniKey* pKey = sect->get(key); pKey)
+				return *pKey;
+		}
 
 		return flDefValue;
 	}
@@ -345,12 +347,13 @@ public:
 	}
 
 	// Version with std::string
-	std::string ReadString(const char* section, const char* key, std::string szDefaultValue)
+	[[nodiscard]] std::string ReadString(const char* section, const char* key, std::string szDefaultValue)
 	{
-		IniSection::IniKey &kkey = (*this)[section][key];
-
-		if (!kkey.empty())
-			return kkey.getValue();
+		if (IniSection* sect = get(section); sect)
+		{
+			if (IniSection::IniKey* pKey = sect->get(key); pKey)
+				return pKey->getValue();
+		}
 		
 		return szDefaultValue;
 	}
@@ -360,12 +363,13 @@ public:
 		WritePrivateProfileStringA(section, key, szValue, m_FilePath);
 	}
 
-	bool ReadBool(const char* section, const char* key, bool bDefaultBool)
+	[[nodiscard]] bool ReadBool(const char* section, const char* key, bool bDefaultBool)
 	{
-		IniSection::IniKey &kkey = (*this)[section][key];
-
-		if (!kkey.empty())
-			return kkey;
+		if (IniSection* sect = get(section); sect)
+		{
+			if (IniSection::IniKey* pKey = sect->get(key); pKey)
+				return *pKey;
+		}
 
 		return bDefaultBool;
 	}
@@ -388,28 +392,26 @@ public:
 		return dummy;
 	};
 
-	IniSection& get(const char* szSection)
+	IniSection *get(const char* szSection)
 	{
-		IniSection dummy;
-
 		for (IniSection &sect : m_sections)
 		{
 			if (!strcmp(sect.getSectionName(), szSection))
-				return sect;
+				return &sect;
 		}
 
-		return dummy;
+		return nullptr;
 	}
 
-	IniSection& add(const char* szSection)
+	IniSection* add(const char* szSection)
 	{
-		if (IniSection& existing = get(szSection); existing.empty())
+		if (IniSection* existing = get(szSection); !existing)
 		{
 			IniSection section(szSection, this);
 
 			m_sections.push_back(section);
 
-			return m_sections.back();
+			return &m_sections.back();
 		}
 		else
 		{
@@ -417,9 +419,9 @@ public:
 		}
 	}
 
-	IniSection& add(const char* szSection, const char* szKey)
+	IniSection* add(const char* szSection, const char* szKey)
 	{
-		if (IniSection& existingSect = get(szSection); existingSect.empty())
+		if (IniSection *existingSect = get(szSection); !existingSect)
 		{
 			IniSection section(szSection, this);
 
@@ -427,19 +429,19 @@ public:
 
 			m_sections.push_back(section);
 
-			return m_sections.back();
+			return &m_sections.back();
 		}
 		else
 		{
-			existingSect.add(szKey);
+			existingSect->add(szKey);
 
 			return existingSect;
 		}
 	}
 
-	IniSection& add(const char* szSection, const char* szKey, std::string value)
+	IniSection* add(const char* szSection, const char* szKey, std::string value)
 	{
-		if (IniSection& existingSect = get(szSection); existingSect.empty())
+		if (IniSection* existingSect = get(szSection); !existingSect)
 		{
 			IniSection section(szSection, this);
 
@@ -447,11 +449,11 @@ public:
 
 			m_sections.push_back(section);
 
-			return m_sections.back();
+			return &m_sections.back();
 		}
 		else
 		{
-			existingSect.add(szKey, value);
+			existingSect->add(szKey, value);
 			return existingSect;
 		}
 	}
